@@ -97,7 +97,7 @@ description: |
 **执行步骤**：
 1. 确认 provider 后，运行脚本：
    ```bash
-   cd /Users/weitong/skills/mo-context/momo-community-writer
+   cd /Users/weitong/skills/mo-skills/momo-community-writer
    python scripts/generate_images.py --provider <google|openai> --state state.json
    ```
 2. 脚本读取 `state.json` 中的 `image_requirements`
@@ -141,7 +141,7 @@ description: |
 **执行步骤**：
 1. 可选运行脚本进行自动化检查：
    ```bash
-   cd /Users/weitong/skills/mo-context/momo-community-writer
+   cd /Users/weitong/skills/mo-skills/momo-community-writer
    python scripts/review_article.py --state state.json
    ```
 2. Claude 结合脚本输出 + references/review_checklist.md 进行人工审核
@@ -170,7 +170,7 @@ description: |
 1. 确认目标平台（wechat/xiaohongshu）
 2. 运行发布脚本：
    ```bash
-   cd /Users/weitong/skills/mo-context/momo-community-writer
+   cd /Users/weitong/skills/mo-skills/momo-community-writer
    python scripts/publish.py --platform <wechat|xiaohongshu> --state state.json
    ```
 3. 脚本尝试 API 发布，失败则自动生成降级包
@@ -249,7 +249,7 @@ API Key 不写入仓库文件，不在对话中回显完整密钥。
 
 使用 `state.json` 记录工作流状态，支持中断续跑和回溯。
 
-**文件位置**：`/Users/weitong/skills/mo-context/momo-community-writer/state.json`
+**文件位置**：`/Users/weitong/skills/mo-skills/momo-community-writer/state.json`
 
 **完整结构**：
 ```json
@@ -326,7 +326,7 @@ python scripts/run_pipeline.py --stage <stage> --state state.json
 
 **工作目录**：
 ```bash
-cd /Users/weitong/skills/mo-context/momo-community-writer
+cd /Users/weitong/skills/mo-skills/momo-community-writer
 ```
 
 **脚本清单**：
