@@ -1,0 +1,39 @@
+{
+  "current_stage": "compose",
+  "version": 1,
+  "history": [],
+  "intent_brief": null,
+  "constraints": null,
+  "success_criteria": null,
+  "approved_outline": null,
+  "draft_v1": null,
+  "final_article_wechat": null,
+  "final_article_xiaohongshu": null,
+  "image_requirements": null,
+  "image_assets": null,
+  "image_generation_log": null,
+  "composed_article": "这是一一个测试文章，标题是「震惊！必看！史上最全的AI编程工具合集，绝对让你看完后转发朋友圈！扫码关注公众号领取福利， 这文章一定要看， 真的太神奇了！同时我们提供了全网最全的AI编程工具合集，保证让你编程效率提升100%，是必备的AI工具。点击链接即可获取。限时免费体验。这个世界第一的AI编程工具真的太棒了！",
+  "review_report": {
+    "passed": false,
+    "issues": [
+      "发现绝对化用语: 第一, 一定, 100%, 绝对, 保证, 全网, 最",
+      "发现平台敏感词: 朋友圈"
+    ],
+    "warnings": [],
+    "suggestions": [
+      "文章段落较少，建议增加结构层次",
+      "文章内容较短，建议补充更多实质性内容"
+    ],
+    "platform": "wechat",
+    "word_count": 156,
+    "title": null,
+    "summary": {
+      "critical": 2,
+      "warnings": 0,
+      "suggestions": 2
+    }
+  },
+  "final_publishable_article": null,
+  "publish_result": null,
+  "export_package": null
+}
