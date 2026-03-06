@@ -1,18 +1,21 @@
 {
   "name": "mo-skills",
-  "displayName": "MO Skills",
-  "description": "个人工作辅助技能集合，为 Claude Code 提供领域专精能力",
-  "author": "HelloWeit",
-  "repository": "https://github.com/HelloWeit/mo-skills",
-  "skills": [
+  "owner": {
+    "name": "HelloWeit",
+    "url": "https://github.com/HelloWeit"
+  },
+  "metadata": {
+    "description": "个人工作辅助技能集合，为 Claude Code 提供领域专精能力",
+    "version": "1.0.0"
+  },
+  "plugins": [
     {
       "name": "momo-community-writer",
-      "path": "momo-community-writer",
-      "description": "社区文章创作与发布工作流，支持公众号与小红书",
-      "triggers": [
-        "写公众号文章",
-        "小红书笔记",
-        "社区内容创作"
+      "description": "社区文章创作与发布工作流，支持公众号与小红书。触发场景：写公众号文章、小红书笔记、社区内容创作",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./momo-community-writer"
       ]
     }
   ]
