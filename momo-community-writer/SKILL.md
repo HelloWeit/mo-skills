@@ -36,11 +36,13 @@ description: |
 - 文风偏好（专业/故事化/口语化/犀利等）
 - 长度与结构偏好
 - 禁区与合规要求（敏感词、免责声明、品牌约束）
+- **输出目录**（询问用户希望将生成的文件保存到哪个目录，默认为 `./output`）
 
 产出：
 - `intent_brief`
 - `constraints`
 - `success_criteria`
+- `output_dir`（用户指定的输出目录）
 
 ### 2) outline
 基于 discovery 产出结构化大纲，至少包含：
@@ -94,6 +96,10 @@ description: |
 - 风格偏好
 - API Key 是否已配置（检查环境变量）
 
+**输出目录**：
+- 生成的图片会下载到 `<output_dir>/images/` 目录
+- 如未在 discovery 阶段设置 `output_dir`，默认为 `./output`
+
 **执行步骤**：
 1. 确认 provider 后，运行脚本：
    ```bash
@@ -102,7 +108,8 @@ description: |
    ```
 2. 脚本读取 `state.json` 中的 `image_requirements`
 3. 调用对应 provider API 生成图片
-4. 结果写入 `state.json` 的 `image_assets` 字段
+4. 图片下载到 `<output_dir>/images/` 目录
+5. 结果写入 `state.json` 的 `image_assets` 字段
 
 **失败处理**：
 - 若 API Key 未配置：提示用户设置环境变量 `GOOGLE_API_KEY` 或 `OPENAI_API_KEY`
@@ -166,6 +173,10 @@ description: |
 ### 9) publish
 优先使用平台发布 adapter。若不可用或失败，自动降级为发布包导出。
 
+**输出目录**：
+- 导出包保存到 `<output_dir>/export/` 目录
+- 包含：文章 MD 文件、export_package.json、manual_steps.txt
+
 **执行步骤**：
 1. 确认目标平台（wechat/xiaohongshu）
 2. 运行发布脚本：
@@ -173,7 +184,7 @@ description: |
    cd /Users/weitong/skills/mo-skills/momo-community-writer
    python scripts/publish.py --platform <wechat|xiaohongshu> --state state.json
    ```
-3. 脚本尝试 API 发布，失败则自动生成降级包
+3. 脚本尝试 API 发布，失败则自动生成降级包到 `<output_dir>/export/`
 
 **失败处理**：
 - 若 API 未配置：自动降级，生成 `export_package`
@@ -259,6 +270,8 @@ API Key 不写入仓库文件，不在对话中回显完整密钥。
   "history": [
     {"stage": "discovery", "version": 1, "changes": [], "artifacts": {}}
   ],
+
+  "output_dir": "./output",
 
   "intent_brief": {},
   "constraints": {},

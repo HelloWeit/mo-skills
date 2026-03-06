@@ -35,6 +35,9 @@ class WorkflowState(BaseModel):
     version: int = 1
     history: list[StateRecord] = []
 
+    # 输出目录配置
+    output_dir: Optional[str] = None  # 用户指定的输出目录
+
     # 各阶段产出
     intent_brief: Optional[dict] = None
     constraints: Optional[dict] = None

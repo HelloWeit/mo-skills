@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -14,6 +15,25 @@ from scripts.compose_article import compose_article_with_images
 from scripts.image_plan import extract_image_requirements
 from scripts.publish import generate_export_package, infer_title_from_state
 from scripts.review_article import review_article as review_article_func
+
+
+def ensure_output_dir(output_dir: str | None) -> Path:
+    """确保输出目录存在，返回 Path 对象"""
+    if output_dir is None:
+        output_dir = "./output"
+    path = Path(output_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_draft_to_output(state: WorkflowState, filename: str, content: str) -> str | None:
+    """将草稿保存到输出目录，返回文件路径"""
+    if not state.output_dir:
+        return None
+    output_path = ensure_output_dir(state.output_dir)
+    file_path = output_path / filename
+    file_path.write_text(content, encoding="utf-8")
+    return str(file_path)
 
 
 def _infer_topic(state: WorkflowState) -> str:
@@ -44,6 +64,15 @@ def run_discovery(state: WorkflowState) -> WorkflowState:
             "可直接用于公众号发布",
             "可改写为小红书版本",
         ]
+    # 如果未设置输出目录，使用默认值并提示
+    if not state.output_dir:
+        state.output_dir = "./output"
+        print(f"[discovery] 输出目录设置为默认值: {state.output_dir}")
+        print("[discovery] 可通过在 state.json 中设置 output_dir 字段来修改")
+    else:
+        # 确保输出目录存在
+        ensure_output_dir(state.output_dir)
+        print(f"[discovery] 输出目录: {state.output_dir}")
     print("[discovery] 需求信息已确认")
     return state
 
@@ -94,6 +123,12 @@ def run_draft(state: WorkflowState) -> WorkflowState:
     parts.append("建议从一个固定主题试跑两周，用数据复盘流程效果并持续优化。")
 
     state.draft_v1 = "\n\n".join(parts)
+
+    # 保存草稿到输出目录
+    draft_path = save_draft_to_output(state, "draft_v1.md", state.draft_v1)
+    if draft_path:
+        print(f"[draft] 初稿已保存到: {draft_path}")
+
     print("[draft] 初稿已生成")
     return state
 
@@ -113,6 +148,15 @@ def run_finalize(state: WorkflowState) -> WorkflowState:
         else:
             xhs_lines.append(line)
     state.final_article_xiaohongshu = "\n".join(xhs_lines)[:950]
+
+    # 保存正式文章到输出目录
+    wechat_path = save_draft_to_output(state, "final_article_wechat.md", state.final_article_wechat)
+    xhs_path = save_draft_to_output(state, "final_article_xiaohongshu.md", state.final_article_xiaohongshu)
+    if wechat_path:
+        print(f"[finalize] 公众号文章已保存到: {wechat_path}")
+    if xhs_path:
+        print(f"[finalize] 小红书文章已保存到: {xhs_path}")
+
     print("[finalize] 双平台文章已生成")
     return state
 
@@ -127,27 +171,55 @@ def run_image_plan(state: WorkflowState) -> WorkflowState:
 
 def run_image_gen(state: WorkflowState) -> WorkflowState:
     """阶段6: 图片生成"""
+    import urllib.request
+
     requirements = state.image_requirements or []
     assets = []
     stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    # 创建图片输出目录
+    output_path = ensure_output_dir(state.output_dir)
+    images_dir = output_path / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
     for i, req in enumerate(requirements, 1):
-        assets.append(
-            {
-                "url": f"https://example.com/mock-image/{stamp}-{i}.png",
-                "prompt": req.get("prompt", ""),
-                "revised_prompt": req.get("prompt", ""),
-                "width": 1024,
-                "height": 1024,
-                "provider": "mock",
-                "status": "success",
-                "position": req.get("position", f"位置 {i}"),
-                "purpose": req.get("purpose"),
-                "style": req.get("style"),
-            }
-        )
+        asset = {
+            "url": f"https://example.com/mock-image/{stamp}-{i}.png",
+            "prompt": req.get("prompt", ""),
+            "revised_prompt": req.get("prompt", ""),
+            "width": 1024,
+            "height": 1024,
+            "provider": "mock",
+            "status": "success",
+            "position": req.get("position", f"位置 {i}"),
+            "purpose": req.get("purpose"),
+            "style": req.get("style"),
+        }
+
+        # 保存图片到本地（mock 模式下只是记录路径）
+        local_filename = f"image_{stamp}_{i}.png"
+        local_path = images_dir / local_filename
+        asset["local_path"] = str(local_path)
+
+        # 如果是真实 URL，尝试下载
+        real_url = req.get("url") or asset["url"]
+        if real_url and not real_url.startswith("https://example.com/"):
+            try:
+                urllib.request.urlretrieve(real_url, local_path)
+                asset["downloaded"] = True
+            except Exception as e:
+                asset["downloaded"] = False
+                asset["download_error"] = str(e)
+        else:
+            asset["downloaded"] = False
+            asset["download_note"] = "mock 模式，未实际下载"
+
+        assets.append(asset)
+
     state.image_assets = assets
     state.image_generation_log = assets
     print(f"[image-gen] 已生成 mock 图片 {len(assets)} 张")
+    print(f"[image-gen] 图片目录: {images_dir}")
     return state
 
 
@@ -179,6 +251,8 @@ def run_review(state: WorkflowState) -> WorkflowState:
 
 def run_publish(state: WorkflowState) -> WorkflowState:
     """阶段9: 发布"""
+    import json
+
     article = state.final_publishable_article or state.composed_article
     if not article:
         raise ValueError("publish 阶段缺少可发布文章")
@@ -197,6 +271,29 @@ def run_publish(state: WorkflowState) -> WorkflowState:
         "mode": "export_only",
         "reason": "MVP 默认导出，不直接调用平台 API",
     }
+
+    # 保存导出包到输出目录
+    output_path = ensure_output_dir(state.output_dir)
+    export_dir = output_path / "export"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    # 保存文章
+    safe_title = "".join(c for c in (title or "article") if c.isalnum() or c in " -_")[:50]
+    article_file = export_dir / f"{safe_title}.md"
+    article_file.write_text(article, encoding="utf-8")
+
+    # 保存导出包 JSON
+    export_json = export_dir / "export_package.json"
+    export_json.write_text(json.dumps(export, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 保存手动发布步骤
+    steps_file = export_dir / "manual_steps.txt"
+    steps_content = "\n".join(export.get("manual_steps", []))
+    steps_file.write_text(steps_content, encoding="utf-8")
+
+    print(f"[publish] 导出包已保存到: {export_dir}")
+    print(f"[publish] - 文章: {article_file}")
+    print(f"[publish] - 元数据: {export_json}")
     print("[publish] 已生成导出发布包")
     return state
 

@@ -9,12 +9,34 @@ Usage:
 import argparse
 import os
 import sys
+import urllib.request
+from pathlib import Path
+from datetime import datetime
 
 # 添加父目录到 path 以导入模块
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from state import load_state, save_state
 from providers.image import GoogleImageProvider, OpenAIImageProvider
+
+
+def ensure_output_dir(output_dir: str | None) -> Path:
+    """确保输出目录存在，返回 Path 对象"""
+    if output_dir is None:
+        output_dir = "./output"
+    path = Path(output_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def download_image(url: str, local_path: Path) -> bool:
+    """下载图片到本地"""
+    try:
+        urllib.request.urlretrieve(url, local_path)
+        return True
+    except Exception as e:
+        print(f"       [warn] 下载失败: {e}")
+        return False
 
 
 def check_api_key(provider: str) -> tuple[bool, str]:
@@ -108,6 +130,11 @@ def main():
         default=1024,
         help="图片高度 (default: 1024)"
     )
+    parser.add_argument(
+        "--output-dir", "-o",
+        default=None,
+        help="输出目录（优先使用 state.json 中的 output_dir，未设置时默认 ./output）"
+    )
 
     args = parser.parse_args()
 
@@ -127,6 +154,15 @@ def main():
         sys.exit(1)
 
     print(f"[info] 发现 {len(state.image_requirements)} 个配图需求")
+
+    # 确定输出目录
+    output_dir = args.output_dir or state.output_dir
+    output_path = ensure_output_dir(output_dir)
+    images_dir = output_path / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[info] 图片输出目录: {images_dir}")
+
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
     # 生成图片
     assets = []
@@ -153,12 +189,25 @@ def main():
         if "style" in req:
             result["style"] = req.get("style")
 
+        # 下载图片到本地
+        if result["status"] == "success" and result.get("url"):
+            local_filename = f"image_{stamp}_{i}.png"
+            local_path = images_dir / local_filename
+            if download_image(result["url"], local_path):
+                result["local_path"] = str(local_path)
+                result["downloaded"] = True
+                print(f"       ✓ 已下载到: {local_path}")
+            else:
+                result["downloaded"] = False
+        else:
+            result["downloaded"] = False
+
         assets.append(result)
         logs.append(result)
 
         if result["status"] == "success":
             success_count += 1
-            print(f"       ✓ 成功: {result['url'][:60]}...")
+            print(f"       ✓ 生成成功: {result['url'][:60]}...")
         else:
             fail_count += 1
             print(f"       ✗ 失败: {result.get('error', '未知错误')}")
