@@ -1,8 +1,8 @@
 """
 Google 图片生成 Provider
 
-使用 Gemini API 进行图片生成。
-文档: https://ai.google.dev/gemini-api/docs/image-generation
+使用 Imagen API 进行图片生成。
+文档: https://ai.google.dev/imagen
 """
 import base64
 import os
@@ -14,7 +14,7 @@ from .base import ImageProvider, ImageResult
 
 
 class GoogleImageProvider(ImageProvider):
-    """Google Gemini 图片生成"""
+    """Google Imagen 图片生成"""
 
     name = "google"
 
@@ -25,44 +25,45 @@ class GoogleImageProvider(ImageProvider):
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY 未配置")
 
-    def _get_size_params(self, width: int, height: int) -> tuple[str, str]:
-        """根据尺寸返回 Gemini 支持的尺寸参数"""
-        # Gemini 支持的尺寸: "256x256", "512x512", "1024x1024" 等
-        if width == height:
-            if width <= 256:
-                return "256x256", "256x256"
-            elif width <= 512:
-                return "512x512", "512x512"
-            elif width <= 1024:
-                return "1024x1024", "1024x1024"
-        # 非正方形，使用最接近的尺寸
-        return "1024x1024", f"{width}x{height}"
+    def _get_aspect_ratio(self, width: int, height: int) -> str:
+        """根据尺寸返回 Imagen 支持的宽高比"""
+        ratio = width / height
+        if ratio > 2:
+            return "21:9"  # 接近 2.35:1
+        elif ratio > 1.5:
+            return "16:9"
+        elif ratio > 1.2:
+            return "4:3"
+        elif ratio < 0.8:
+            return "9:16"
+        elif ratio < 0.95:
+            return "3:4"
+        return "1:1"
 
     def generate(
         self,
         prompt: str,
         width: int = 1024,
         height: int = 1024,
-        model: str = "gemini-2.0-flash-exp",
+        model: str = "imagen-4.0-generate-001",
         **kwargs
     ) -> ImageResult:
         """生成图片"""
 
-        gemini_size, original_size = self._get_size_params(width, height)
+        aspect_ratio = self._get_aspect_ratio(width, height)
 
-        # 构建请求体
-        # 参考: https://ai.google.dev/gemini-api/docs/image-generation
-        url = f"{self.API_BASE}/models/{model}:generateContent"
+        # Imagen API 使用 predict 方法
+        url = f"{self.API_BASE}/models/{model}:predict"
 
         payload = {
-            "contents": [{
-                "parts": [{
-                    "text": f"Generate an image: {prompt}"
-                }]
-            }],
-            "generationConfig": {
-                "responseModalities": ["image", "text"],
-                "imageSizes": [gemini_size]
+            "instances": [
+                {
+                    "prompt": prompt
+                }
+            ],
+            "parameters": {
+                "sampleCount": 1,
+                "aspectRatio": aspect_ratio
             }
         }
 
@@ -71,7 +72,7 @@ class GoogleImageProvider(ImageProvider):
             "x-goog-api-key": self.api_key
         }
 
-        with httpx.Client(timeout=60) as client:
+        with httpx.Client(timeout=120) as client:
             response = client.post(url, json=payload, headers=headers)
 
             if response.status_code != 200:
@@ -84,45 +85,47 @@ class GoogleImageProvider(ImageProvider):
         image_url = None
         image_data = None
 
-        candidates = data.get("candidates", [])
-        for candidate in candidates:
-            content = candidate.get("content", {})
-            parts = content.get("parts", [])
-            for part in parts:
-                # 检查是否有 inline_data (base64 编码的图片)
-                if "inlineData" in part:
-                    inline_data = part["inlineData"]
-                    mime_type = inline_data.get("mimeType", "image/png")
-                    b64_data = inline_data.get("data", "")
+        predictions = data.get("predictions", [])
+        if predictions:
+            pred = predictions[0]
+            # Imagen 返回 bytesBase64Encoded
+            if "bytesBase64Encoded" in pred:
+                b64_data = pred["bytesBase64Encoded"]
 
-                    # 保存为临时文件并返回 URL
-                    ext = mime_type.split("/")[-1] if "/" in mime_type else "png"
+                # 保存为临时文件
+                tmp_dir = os.environ.get("TMPDIR", "/tmp")
+                os.makedirs(tmp_dir, exist_ok=True)
+                suffix = abs(hash(b64_data)) % 100000
+                tmp_path = os.path.join(tmp_dir, f"google_imagen_{os.getpid()}_{suffix}.png")
 
-                    # 使用系统临时目录
+                with open(tmp_path, "wb") as f:
+                    f.write(base64.b64decode(b64_data))
+
+                image_url = f"file://{tmp_path}"
+                image_data = b64_data
+            elif "image" in pred:
+                # 可能有不同的响应格式
+                img_info = pred["image"]
+                if isinstance(img_info, dict) and "bytesBase64Encoded" in img_info:
+                    b64_data = img_info["bytesBase64Encoded"]
                     tmp_dir = os.environ.get("TMPDIR", "/tmp")
                     os.makedirs(tmp_dir, exist_ok=True)
                     suffix = abs(hash(b64_data)) % 100000
-                    tmp_path = os.path.join(tmp_dir, f"google_image_{os.getpid()}_{suffix}.{ext}")
+                    tmp_path = os.path.join(tmp_dir, f"google_imagen_{os.getpid()}_{suffix}.png")
 
                     with open(tmp_path, "wb") as f:
                         f.write(base64.b64decode(b64_data))
 
                     image_url = f"file://{tmp_path}"
                     image_data = b64_data
-                    break
-                # 检查是否有 URL
-                elif "fileData" in part:
-                    file_data = part["fileData"]
-                    image_url = file_data.get("fileUri", "")
-                    break
 
         if not image_url and not image_data:
-            raise Exception("未能从响应中提取图片")
+            raise Exception(f"未能从响应中提取图片。响应: {data}")
 
         return ImageResult(
             url=image_url or "",
             prompt=prompt,
-            revised_prompt=prompt,  # Google 不返回修改后的 prompt
+            revised_prompt=prompt,  # Imagen 不返回修改后的 prompt
             width=width,
             height=height,
             format="png"
@@ -134,8 +137,7 @@ class GoogleImageProvider(ImageProvider):
         prompt: str,
         **kwargs
     ) -> ImageResult:
-        """编辑图片 - Gemini 目前不支持图片编辑，返回新图片"""
-        # Gemini 的图片编辑能力有限，这里简化为重新生成
+        """编辑图片 - Imagen 目前不支持图片编辑，返回新图片"""
         return self.generate(
             prompt=f"Based on this description, modify: {prompt}",
             width=kwargs.get("width", 1024),
